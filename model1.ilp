@@ -1,0 +1,43 @@
+\ Model ICC_new_copy
+\ LP format - for model browsing. Use MPS format to capture full model detail.
+Minimize
+ 
+Subject To
+ R6: k1[2] + k2[2] = 1
+ R149: - kd_u_v[0,2,2,2] + 100000 k1[2] + d[2,2,2] <= 100000
+ R177: w_a_u_v[0,1,2,2] + 2 w_a_u_v[0,2,2,2] + 3 w_a_u_v[0,3,2,2]
+   - kd_u_v[0,0,2,2] - kd_u_v[0,1,2,2] - kd_u_v[0,2,2,2] - kd_u_v[0,3,2,2]
+   >= 0
+ R195: 100000 delta_a_u_v[1,2,2] - w_a_u_v[0,1,2,2] >= 0
+ R204: 100000 delta_a_u_v[2,2,2] - w_a_u_v[0,2,2,2] >= 0
+ R213: 100000 delta_a_u_v[3,2,2] - w_a_u_v[0,3,2,2] >= 0
+ R330: - delta_a_u_v[1,2,2] - 2 delta_a_u_v[2,2,2] - 3 delta_a_u_v[3,2,2]
+   + L[2,2] = 0
+ R438: - kd_u_v[1,2,2,2] + 100000 k2[2] + d[2,2,2] <= 100000
+ R492: w_a_u_v[1,1,2,2] + 2 w_a_u_v[1,2,2,2] + 3 w_a_u_v[1,3,2,2]
+   - kd_u_v[1,0,2,2] - kd_u_v[1,1,2,2] - kd_u_v[1,2,2,2] - kd_u_v[1,3,2,2]
+   >= 0
+ R510: 100000 delta_a_u_v[1,2,2] - w_a_u_v[1,1,2,2] >= 0
+ R519: 100000 delta_a_u_v[2,2,2] - w_a_u_v[1,2,2,2] >= 0
+ R528: 100000 delta_a_u_v[3,2,2] - w_a_u_v[1,3,2,2] >= 0
+ R3443: - 0.001 z_1[2,2] + z_data[2,2] >= 0
+ R3444: - 0.001 z_1[2,2] + z_data[2,2] - d[2,2,2] <= -0.001
+ R7962: L[2,2] = 0
+Bounds
+ z_data[2,2] free
+ w_a_u_v[0,1,2,2] free
+ w_a_u_v[0,2,2,2] free
+ w_a_u_v[0,3,2,2] free
+ w_a_u_v[1,1,2,2] free
+ w_a_u_v[1,2,2,2] free
+ w_a_u_v[1,3,2,2] free
+ kd_u_v[0,2,2,2] free
+ kd_u_v[1,2,2,2] free
+ L[2,2] free
+ d[2,2,2] free
+Binaries
+ z_1[2,2] delta_a_u_v[1,2,2] delta_a_u_v[2,2,2] delta_a_u_v[3,2,2] k1[2]
+ k2[2]
+Generals
+ L[2,2]
+End
