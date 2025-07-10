@@ -686,7 +686,6 @@ for m in range(3, 4):
                         flag = 1
                         break
                     else:
-                        u += 1
                         flag = 0
                         data_sum = np.zeros([pod_number, pod_number])
                         # print(link_matrix_end)
@@ -740,6 +739,7 @@ for m in range(3, 4):
 
                     # cassini 部分
                     conn_matrix = link_matrix_end * b_link
+                    """
                     # conn_matrix = link_matrix_end * b_link
                     simulator = cassini_schedule.CassiniSimulator(num_servers=pod_number, link_capacity=b_link)
                     # data_matrix_cassini = np.array([np.zeros([pod_number, pod_number]) for _ in range(len(solution_out))])
@@ -786,7 +786,7 @@ for m in range(3, 4):
                     print("cassini", mean_time, max_time)
                     result_t.append(mean_time)
                     result_u.append(max_time)
-
+                    """
                     # conn_matrix = (np.ones(pod_number) - np.eye(pod_number)) * b_link
                     network = sjf_schedule.OpticalNetwork(link_matrix_end * b_link, 0)
                     network_las = las_schedule.OpticalNetwork(link_matrix_end * b_link, 0)
@@ -821,9 +821,9 @@ for m in range(3, 4):
                         businesses.append(biz)
                         businesses_las.append(biz_las)
                         businesses_hrrn.append(biz_hrrn)
-                    avg = sjf_schedule.simulate_sjf_with_starvation(businesses, network, 400, 23 - 2 * a)
-                    avg_las = las_schedule.simulate_las_with_starvation(businesses_las, network_las, 400, 23 - 2 * a)
-                    avg_hrrn = hrrn_schedule.simulate_hrrn_with_starvation(businesses_hrrn, network_hrrn, 400, 23 - 2 * a)
+                    avg = sjf_schedule.simulate_sjf_with_starvation(businesses, network, 400, 14 - 2 * a)
+                    avg_las = las_schedule.simulate_las_with_starvation(businesses_las, network_las, 400, 14 - 2 * a)
+                    avg_hrrn = hrrn_schedule.simulate_hrrn_with_starvation(businesses_hrrn, network_hrrn, 400, 14 - 2 * a)
 
                     comm_time = np.zeros(len(businesses))
                     avg_fcfs = np.zeros(len(businesses))
@@ -864,3 +864,4 @@ for m in range(3, 4):
                     ws.append(result[k])
                     wb.save(f"output_{a}_ocs.xlsx")
                 a += 1
+            u += 1

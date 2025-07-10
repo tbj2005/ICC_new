@@ -20,23 +20,19 @@ def process_data(filepath):
     """处理文件并返回时间和利用率的统计数据"""
     try:
         df = pd.read_excel(filepath)
-        # 处理时间数据 (前6列)
+        # 处理时间数据 (前7列)
         time_data = df.iloc[:, :7]
         time_data.columns = time_algorithms
-        log_time = np.log10(time_data.apply(pd.to_numeric, errors='coerce') + 1)  # log10(x+1)
+        time_data = time_data.apply(pd.to_numeric, errors='coerce')
 
-        # 处理利用率数据 (后6列)
-        util_data = df.iloc[:, 8:14]
+        # 处理利用率数据 (后7列)
+        util_data = df.iloc[:, 7:14]
         util_data.columns = util_algorithms
         util_data = util_data.apply(pd.to_numeric, errors='coerce')
-        util_data = util_data.replace(0, 1e-10)  # 避免log10(0)
-        log_util = np.log10(util_data)  # log10(x)
 
         return {
-            'time_mean': log_time.mean(),
-            'time_std': log_time.std(),
-            'util_mean': log_util.mean(),
-            'util_std': log_util.std()
+            'time_mean': time_data.mean(),
+            'util_mean': util_data.mean()
         }
     except Exception as e:
         print(f"处理文件 {filepath} 出错: {str(e)}")
@@ -64,13 +60,8 @@ def plot_metrics(metric_type, title, ylabel):
     algorithms = time_algorithms if metric_type == 'time' else util_algorithms
     for i, algo in enumerate(algorithms):
         means = [results[label][f'{metric_type}_mean'][algo] for label in x_labels]
-        stds = [results[label][f'{metric_type}_std'][algo] for label in x_labels]
 
         plt.plot(x, means, 'o-', color=colors[i], label=algo.replace('_util', ''), linewidth=2)
-        plt.fill_between(x,
-                         np.array(means) - np.array(stds),
-                         np.array(means) + np.array(stds),
-                         color=colors[i], alpha=0.2)
 
     plt.title(title, fontsize=12)
     plt.xlabel('Number of Jobs', fontsize=10)
@@ -79,14 +70,14 @@ def plot_metrics(metric_type, title, ylabel):
     plt.grid(True, linestyle='--', alpha=0.4)
     plt.legend(loc='upper left', framealpha=0.7, edgecolor='gray')
     plt.tight_layout()
-    plt.savefig(f'{metric_type}_performance_log10.png', dpi=300)
+    plt.savefig(f'{metric_type}_performance_job.png', dpi=300)
     plt.close()
 
 
 # 5. 生成并保存两个图表
-plot_metrics('time', '', r'$log_{10}$(Average Iteration Time + 1)')
-plot_metrics('util', '', r'$log_{10}$(Network Utilization)')
+plot_metrics('time', '', 'Average Iteration Time')
+plot_metrics('util', '', 'Network Utilization')
 
 print("图表已保存为：")
-print("- time_performance_log10.png (执行时间)")
-print("- util_performance_log10.png (网络利用率)")
+print("- time_performance_job.png (执行时间)")
+print("- util_performance_job.png (网络利用率)")

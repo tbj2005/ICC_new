@@ -222,16 +222,21 @@ def stuffing_min(matrix, R_S):
     return copied_matrix
 
 
-def max_component(matrix, size):
+def max_component(matrix_stuff, matrix_data, size):
     """
     找到该矩阵的可分解最大权置换矩阵
-    :param matrix:
+    :param matrix_stuff:
+    :param matrix_data:
     :param size:
     :return:
     """
-    nonzero_num = np.count_nonzero(matrix)
-    sort_index = np.argsort(-1 * matrix, axis=None)[: nonzero_num]
+    nonzero_num = np.count_nonzero(matrix_stuff)
+    nonzero_num_data = np.count_nonzero(np.where(copy.deepcopy(matrix_data) >= 0.000000001, matrix_data, 0))
+    sort_index = np.argsort(-1 * matrix_data, axis=None)[: nonzero_num_data]
     sort_row_col = [(int(sort_index[i] / size), int(sort_index[i] % size)) for i in range(len(sort_index))]
+    reserve_matrix = np.where(matrix_data > 0, 0, copy.deepcopy(matrix_stuff))
+    sort_index_stuff = np.argsort(-1 * reserve_matrix, axis=None)[: nonzero_num - nonzero_num_data]
+    sort_row_col_stuff = [(int(sort_index_stuff[i] / size), int(sort_index_stuff[i] % size)) for i in range(len(sort_index_stuff))]
     bool_matrix = np.zeros([size, size])
     ava_row = [i for i in range(size)]
     ava_col = [i for i in range(size)]
@@ -240,7 +245,10 @@ def max_component(matrix, size):
     flag = 0
     value = 0
     for i in range(nonzero_num):
-        (sort_row, sort_col) = sort_row_col[i]
+        if i >= nonzero_num_data:
+            (sort_row, sort_col) = sort_row_col_stuff[i - nonzero_num_data]
+        else:
+            (sort_row, sort_col) = sort_row_col[i]
         if sort_row in ava_row:
             ava_row = [i for i in ava_row if i != sort_row]
         if sort_col in ava_col:
@@ -257,7 +265,7 @@ def max_component(matrix, size):
                 # 有 0 说明当前还没有非零最大匹配
                 continue
             else:
-                value = matrix[sort_row][sort_col]
+                value = np.min(np.array([matrix_stuff[row_ind[c]][col_ind[c]] for c in range(len(row_ind))]))
                 flag = 1
                 break
     if flag == 0:
@@ -363,13 +371,16 @@ def matrix_decompose(data_matrix, matrix, size, threshold, num):
     use_matrix = copy.deepcopy(matrix)
     use_matrix = use_matrix.astype(np.float64)
     finish_data = np.zeros([size, size])
+    data_matrix_copy = copy.deepcopy(data_matrix)
     use_data_rate = 0
     count = 0
     while 1:
         # 第一轮分解，无需填充
         # if count == num and num > 0:
         #     break
-        max_matrix = max_component(use_matrix, size)
+        if len(decompose_matrix) == num:
+            break
+        max_matrix = max_component(use_matrix, data_matrix_copy - finish_data, size)
         max_matrix = max_matrix.astype(np.float64)
         bool_finish = np.where(finish_data > 0, 1, 0)
         if np.max(max_matrix) == 0 or is_routing_supported(data_matrix, bool_finish):

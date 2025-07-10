@@ -8,9 +8,10 @@ import FIFO_schedule
 import las_schedule
 import hrrn_schedule
 import generate_job
-
+import matplotlib.pyplot as plt
 import numpy as np
 from openpyxl import Workbook
+
 import bvn
 import Schedule_part
 from scipy.optimize import linear_sum_assignment
@@ -99,7 +100,7 @@ def job_ring(job_set_i, fj, ufj, local_solution, single_traffic, sum_traffic, po
         time8 = time.time()
         data_matrix_stuff, _ = bvn.solve_target_matrix(data_matrix_block, len(pod_set_i))
         time9 = time.time()
-        bvn_compose, sum_bvn = bvn.matrix_decompose(data_matrix_block, data_matrix_stuff, len(pod_set_i), 0.8, num_bvn)
+        bvn_compose, sum_bvn = bvn.matrix_decompose(data_matrix_block, data_matrix_stuff, len(pod_set_i), 0.7, num_bvn)
         time10 = time.time()
         # print(i, time9 - time8, time10 - time9)
         sum_bvn_reconstruct = expand_sub_matrix(sum_bvn, pod, pod_set_i)
@@ -371,7 +372,7 @@ def tpe(job_set_tpe, job_matrix, job_link_index, port, pod, num_bvn, band_per_po
     job_matrix_edit = copy.deepcopy(job_matrix)
     sum_data_zip = extract_sub_matrix(sum_data_matrix, pod_set_tpe)
     data_matrix_stuff, _ = bvn.solve_target_matrix(sum_data_zip, len(pod_set_tpe))
-    bvn_compose, sum_bvn = bvn.matrix_decompose(sum_data_zip, data_matrix_stuff, len(pod_set_tpe), 0.9, num_bvn)
+    bvn_compose, sum_bvn = bvn.matrix_decompose(sum_data_zip, data_matrix_stuff, len(pod_set_tpe), 0.7, num_bvn)
     # if not is_strongly_connected_scipy(sum_bvn):
     #     last_compose = bvn_compose[-1]
     #     ring_compose = sub_ring_edit(last_compose, len(pod_set_tpe))
@@ -477,7 +478,7 @@ def iteration_time(job_matrix, link_matrix_all, pod, band_per_port, long_group, 
         short_bool = 1
     if long_train > short_flow:
         long_bool = 1
-    return max(short_train, long_flow), max(long_train, short_flow), long_bool, short_bool, long_flow + short_flow
+    return max(short_train, long_flow), max(long_train, short_flow), long_bool, short_bool, long_flow + short_flow, long_flow, short_flow
 
 
 def match_degree_count(job_matrix, long_group, short_group, reverse_group, link_matrix_match, pod, band_per_port):
@@ -538,7 +539,7 @@ def group(job_matrix, t_train, band_per_port, pod, link_matrix_group, job_set_gr
             t_train_short = 0
         else:
             t_train_short = max([t_train[i] for i in short_group])
-        t1, t2, long_bool, short_bool, _ = iteration_time(job_matrix, link_matrix_group, pod, band_per_port, long_group,
+        t1, t2, long_bool, short_bool, _, _, _ = iteration_time(job_matrix, link_matrix_group, pod, band_per_port, long_group,
                                                        short_group, t_train_long, t_train_short)
         if long_bool == 1 and short_bool == 0:  # flag = 2
             flag.append(2)
@@ -606,8 +607,8 @@ def group(job_matrix, t_train, band_per_port, pod, link_matrix_group, job_set_gr
 
 
 # 主函数
-for a in range(1, 2):
-    for m in range(1, 2):
+for a in range(2, 3):
+    for m in range(3, 4):
         job_number = 100 * m
         result = []
         wb = Workbook()
@@ -648,6 +649,7 @@ for a in range(1, 2):
 
                 job_set, pod_set = Schedule_part.non_conflict(solution_out, pod_number)
                 result_t = []
+                flag = 0
                 result_u = []
 
                 for i in range(len(job_set)):
@@ -659,15 +661,15 @@ for a in range(1, 2):
                     pod_sort = copy.deepcopy(pod_set[i])
                     pod_sort.sort()
                     time1 = time.time()
-                    data_matrix, link_job = job_ring(job_set[i], f_job, uf_job, solution_out, single_link_out, sum_traffic_out, pod_number, pod_sort, 10)
+                    data_matrix, link_job = job_ring(job_set[i], f_job, uf_job, solution_out, single_link_out, sum_traffic_out, pod_number, pod_sort, 5)
                     time2 = time.time()
                     # print(time2 - time1)
-                    data_matrix, sum_job, link_matrix_end = tpe(job_set[i], data_matrix, link_job, port_num, pod_number, 10, b_link, single_link_out, pod_sort, 1e-3)
+                    data_matrix, sum_job, link_matrix_end = tpe(job_set[i], data_matrix, link_job, port_num, pod_number, - 1, b_link, single_link_out, pod_sort, 1e-3)
                     if np.max(sum_job) == 0:
                         print("fail")
+                        flag = 1
                         break
                     else:
-                        u += 1
                         data_sum = np.zeros([pod_number, pod_number])
                         for j in range(len(data_matrix)):
                             data_sum += data_matrix[j]
@@ -679,7 +681,14 @@ for a in range(1, 2):
                         # print(time4 - time3)
                         train_g1 = [train_time[i] for i in g1] + [0]
                         train_g2 = [train_time[i] for i in g2] + [0]
+                        t_tpe = np.zeros(job_number)
+                        t_notpe = np.zeros(job_number)
                         t_iter = iteration_time(data_matrix, link_matrix_end, pod_number, b_link, g1, g2, max(train_g1), max(train_g2))
+                        for c in range(job_number):
+                            if c in g1:
+                                t_tpe[c] = train_time[c] + t_iter[5]
+                            if c in g2:
+                                t_tpe[c] = train_time[c] + t_iter[6]
                         # ideal_matrix = b_link * link_matrix_end * (t_iter[0] + t_iter[1])
                         # delta = ideal_matrix - data_matrix
                         data_matrix_not_tpe = np.zeros_like(data_matrix)
@@ -703,6 +712,11 @@ for a in range(1, 2):
                         train_g4 = [train_time[i] for i in g4] + [0]
                         t_iter_1 = iteration_time(data_matrix_not_tpe, no_tpe_link, pod_number, b_link, g1, g2, max(train_g3),
                                                 max(train_g4))
+                        for c in range(job_number):
+                            if c in g3:
+                                t_notpe[c] = train_time[c] + t_iter[5]
+                            if c in g4:
+                                t_notpe[c] = train_time[c] + t_iter[6]
                         # ideal_matrix = b_link * link_matrix_end * (t_iter[0] + t_iter[1])
                         # delta = ideal_matrix - data_matrix
                         print("no-tpe", t_iter_1[0] + t_iter_1[1])
@@ -711,7 +725,7 @@ for a in range(1, 2):
                         # print(data_matrix)
                         # ILP_new.ilp_new(fix_job, unfix_job, train_time, job_number, pod_number, b_link, single_link_out,
                         #                 port_num, solution_out)
-                    """
+
                     # cassini 部分
                     conn_matrix = link_matrix_end * b_link
                     # conn_matrix = link_matrix_end * b_link
@@ -737,7 +751,7 @@ for a in range(1, 2):
                             t_link_j = data_matrix[job_index][row[j]][col[j]] / conn_matrix[row[j]][col[j]]
                             if t_link_j > t_job:
                                 t_job = t_link_j
-                        t_comm = t_job
+                        t_comm = t_job * 10
                         t_comp = train_time[job_index]
                         if t_comm > 0:
                             band_matrix = data_matrix[job_index] / t_comm
@@ -759,7 +773,7 @@ for a in range(1, 2):
                     print("cassini", mean_time, np.sum(data_sum_cassini) / np.sum(ideal_matrix_cassini))
                     result_t.append(mean_time)
                     result_u.append(max_time)
-                    """
+
                     # conn_matrix = (np.ones(pod_number) - np.eye(pod_number)) * b_link
                     network = sjf_schedule.OpticalNetwork(link_matrix_end * b_link, 0)
                     network_las = las_schedule.OpticalNetwork(link_matrix_end * b_link, 0)
@@ -825,8 +839,33 @@ for a in range(1, 2):
                     print("FCFS", np.max(avg_fcfs), np.mean(np.array(avg_fcfs)), np.sum(data_sum_fcfs) / (np.max(avg_fcfs) * np.sum(link_matrix_end) * b_link))
                     result_t.append(np.mean(avg_fcfs))
                     result_u.append(np.max(avg_fcfs))
+                    labels = ['TPE', 'No-TPE', 'Cassini', 'SJF', 'LAS', 'HRRN', 'FCFS']
+                    lists = [t_tpe, t_notpe, np.array(avg_times) / 1000, avg, avg_las, avg_hrrn, avg_fcfs]
+                    print(lists[0], '\n')
+                    print(lists[1], '\n')
+                    print(lists[2], '\n')
+                    print(lists[3], '\n')
+                    print(lists[4], '\n')
+                    print(lists[5], '\n')
+                    print(lists[6], '\n')
+                    for data, label in zip(lists, labels):
+                        sorted_data = np.sort(data)  # 排序数据
+                        print(label)
+                        if label == 'FCFS':
+                            continue
+                        yvals = np.arange(len(sorted_data)) / len(sorted_data)  # 计算 CDF
+                        plt.plot(sorted_data, yvals, label=label)
 
+                    plt.xlabel('Completion Time')
+                    plt.ylabel('CDF')
+                    plt.title('CDF of Algorithm Performance')
+                    plt.legend()
+                    plt.grid(True)
+                    plt.savefig('algorithm_cdf_comparison.png', dpi=300, bbox_inches='tight')  # Save as PNG
+                    plt.savefig('algorithm_cdf_comparison.pdf', bbox_inches='tight')  # Optional: Save as PDF
+                if flag == 0:
+                    u += 1
                 result.append(result_t + result_u)
             for k in range(len(result)):
                 ws.append(result[k])
-                wb.save(f"output_{m}_jobs.xlsx")
+                wb.save(f"output.xlsx")

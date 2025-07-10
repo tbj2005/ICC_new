@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 
 # 读取数据文件
 data_files = {
-    "Dataset 1": "output_1_jobs.xlsx",
-    "Dataset 2": "output_2_jobs.xlsx",
-    "Dataset 3": "output_3_jobs.xlsx",
-    "Dataset 4": "output_4_jobs.xlsx",
-    "Dataset 5": "output_5_jobs.xlsx"
+    "Dataset 1": "output_1_ocs.xlsx",
+    "Dataset 2": "output_2_ocs.xlsx",
+    "Dataset 3": "output_3_ocs.xlsx",
+    "Dataset 4": "output_4_ocs.xlsx",
+    "Dataset 5": "output_5_ocs.xlsx"
 }
 
 # 算法名称（前7列和后7列）
@@ -47,7 +47,7 @@ plt.ylabel("Time")
 plt.legend(loc='upper left', bbox_to_anchor=(1, 1))  # 标签放在左上角外侧
 plt.grid(True)
 plt.tight_layout()
-plt.savefig("average_time_comparison.png", bbox_inches='tight')
+plt.savefig("average_time_comparison_ocs.png", bbox_inches='tight')
 plt.close()
 
 # 图2: 最大时间折线图
@@ -61,7 +61,7 @@ plt.ylabel("Time")
 plt.legend(loc='upper left', bbox_to_anchor=(1, 1))  # 标签放在左上角外侧
 plt.grid(True)
 plt.tight_layout()
-plt.savefig("max_time_comparison.png", bbox_inches='tight')
+plt.savefig("max_time_comparison_ocs.png", bbox_inches='tight')
 plt.close()
 
-print("两张图表已保存为 average_time_comparison.png 和 max_time_comparison.png")
+print("两张图表已保存为 average_time_comparison_ocs.png 和 max_time_comparison_ocs.png")
