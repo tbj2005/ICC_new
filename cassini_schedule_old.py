@@ -243,120 +243,116 @@ class CassiniSimulator:
         return time_shifts
 
     def simulate_iteration(self):
-        """基于全局时间线的精确冲突检测与惩罚计算"""
-        # 1. 应用Cassini时间偏移
+        """Simulate one iteration with dynamic per-link overload calculation and fair penalty allocation."""
+        # Phase 1: Apply time shifts
         time_shifts = self.build_affinity_graph()
         for job in self.active_jobs:
             job['time_shift'] = time_shifts.get(job['id'], 0)
 
-        # 2. 生成全局事件时间线（所有作业的所有通信时段）
-        events = []
+        # Phase 2: Precompute LCM period
+        # lcm_period = self.lcm([job['iteration_time'] for job in self.active_jobs])
+        lcm_period = max([job['iteration_time'] for job in self.active_jobs])
+
+        # Phase 3: Calculate penalties per job
+        job_penalties = defaultdict(float)
+        bottleneck_links = self.find_bottleneck_links()
+
         for job in self.active_jobs:
-            # 获取该作业在所有链路上的通信窗口
-            srcs, dsts = np.where(job['bandwidth_matrix'] > 0)
-            for src, dst in zip(srcs, dsts):
-                link = (src, dst)
-                bw = job['bandwidth_matrix'][src, dst]
-                windows = self.get_periodic_windows(
-                    job['time_shift'],
-                    job['comm_time'],
-                    job['iteration_time'],
-                    max([j['iteration_time'] for j in self.active_jobs])
-                )
-                for start, end in windows:
-                    events.append((start, 'start', job['id'], link, bw))
-                    events.append((end, 'end', job['id'], link, bw))
+            job_penalties[job['id']] = 0
+        for link, job_ids in bottleneck_links.items():
+            # Only process links with actual contention
+            if len(job_ids) < 2:
+                continue
 
-        # 3. 按时间排序所有事件
-        events.sort(key=lambda x: x[0])
+            # Get all jobs sharing this link with their bandwidths
+            sharing_jobs = [j for j in self.active_jobs if j['id'] in job_ids]
 
-        # 4. 全局冲突检测
-        active_communications = defaultdict(dict)  # {link: {job_id: bw}}
-        current_penalties = defaultdict(float)  # {job_id: penalty}
+            # Calculate dynamic penalties for this link
+            link_penalties = self.calculate_link_penalties(
+                jobs=sharing_jobs,
+                link=link,
+                lcm_period=lcm_period
+            )
+
+            # Accumulate penalties to jobs
+            for job_id, penalty in link_penalties.items():
+                job_penalties[job_id] = max(job_penalties[job_id], penalty)
+
+        # Phase 4: Apply penalties and record results
+        iteration_time = lcm_period
+        for job in self.active_jobs:
+            total_penalty = job_penalties.get(job['id'], 0)
+
+            # Ensure penalty doesn't exceed physical limits
+            # clamped_penalty = min(total_penalty, job['comm_time'] * 3)  # Max 3x base comm time
+            # iteration_time = job['iteration_time'] + clamped_penalty
+            # iter_num = int(lcm_period / job["iteration_time"])
+            iteration_time += total_penalty
+
+        # self.iteration_times.append(iteration_times)
+        iter_num = [int(lcm_period / job['iteration_time']) for job in self.active_jobs]
+        avg = [iteration_time / int(lcm_period / job['iteration_time']) for job in self.active_jobs]
+        return avg, iter_num
+
+    def calculate_link_penalties(self, jobs, link, lcm_period):
+        # 生成带作业ID和带宽的事件
+        events = []
+        for job in jobs:
+            bw = job['bandwidth_matrix'][link]
+            windows = self.get_periodic_windows(
+                job['time_shift'],
+                job['comm_time'],
+                job['iteration_time'],
+                lcm_period
+            )
+            for start, end in windows:
+                events.append((start, 'a_start', bw, job['id']))
+                events.append((end, 'b_end', bw, job['id']))
+
+        # 按时间排序事件
+        events.sort()
+
+        # 动态计算惩罚
+        active_jobs = {}  # {job_id: bandwidth}
+        current_demand = 0
+        job_penalties = defaultdict(float)
         prev_time = 0
+        for time, typ, bw, job_id in events:
+            # 处理上一时段的过载分配
+            if len(active_jobs) >= 2:
+                overload = max(0, current_demand - self.link_capacity)
+                if overload > 0:
+                    duration = time - prev_time
+                    total_bw = sum(active_jobs.values())
+                    for jid, jbw in active_jobs.items():
+                        job_penalties[jid] += (jbw / total_bw) * overload * duration / self.link_capacity
 
-        for time, typ, job_id, link, bw in events:
-            # 处理上一个时段的冲突
-            time_elapsed = time - prev_time
-            if time_elapsed > 0:
-                self._calculate_instant_penalties(
-                    active_communications,
-                    time_elapsed,
-                    current_penalties
-                )
-
-            # 更新当前活动通信
-            if typ == 'start':
-                active_communications[link][job_id] = bw
+            # 更新当前活跃作业
+            if typ == 'a_start':
+                active_jobs[job_id] = bw
+                current_demand += bw
             else:
-                active_communications[link].pop(job_id, None)
+                del active_jobs[job_id]
+                current_demand -= bw
 
             prev_time = time
 
-        # 5. 应用惩罚（限制最大惩罚）
-        iteration_times = []
-        for job in self.active_jobs:
-            penalty = min(
-                current_penalties.get(job['id'], 0),
-                job['comm_time'] * 2  # 最多2倍通信时间
-            )
-            iteration_times.append(job['iteration_time'] + penalty)
-
-        self.iteration_times.append(iteration_times)
-        return np.mean(iteration_times)
-
-    def _calculate_instant_penalties(self, active_comms, duration, penalties):
-        """计算当前瞬时各链路的冲突惩罚"""
-        link_overloads = {}
-
-        # 第一步：检测所有链路的瞬时过载
-        for link, jobs in active_comms.items():
-            total_bw = sum(jobs.values())
-            overload = max(0, total_bw - self.link_capacity)
-            if overload > 0:
-                link_overloads[link] = {
-                    'total': total_bw,
-                    'overload': overload,
-                    'jobs': jobs
-                }
-
-        # 第二步：合并跨链路冲突（避免重复惩罚）
-        conflicted_jobs = set()
-        for link, data in link_overloads.items():
-            for job_id in data['jobs']:
-                conflicted_jobs.add(job_id)
-
-        # 第三步：按作业的"冲突强度"分配惩罚
-        job_conflict_strength = defaultdict(float)
-        total_strength = 0
-
-        for job_id in conflicted_jobs:
-            # 冲突强度 = 该作业在所有过载链路的带宽占比之和
-            strength = 0
-            for link, data in link_overloads.items():
-                if job_id in data['jobs']:
-                    strength += data['jobs'][job_id] / data['total']
-            job_conflict_strength[job_id] = strength
-            total_strength += strength
-
-        if total_strength > 0:
-            for job_id, strength in job_conflict_strength.items():
-                # 惩罚 = 总过载时间 × (该作业的冲突强度占比)
-                penalties[job_id] += duration * (strength / total_strength)
+        return job_penalties
 
     def get_periodic_windows(self, start, duration, period, lcm_period):
         """生成周期性通信窗口（支持跨周期边界）"""
         windows = []
-        num_repeats = np.ceil(lcm_period / period)
-        for k in range(num_repeats):
-            window_start = (start + k * period) % lcm_period
-            window_end = (window_start + duration) % lcm_period
-            if window_end < window_start:
-                windows.append((window_start, lcm_period))
-                if window_end != 0:
-                    windows.append((0, window_end))
-            else:
-                windows.append((window_start, window_end))
+        windows.append((start, start + duration))
+        # num_repeats = lcm_period // period
+        # for k in range(num_repeats):
+        #     window_start = (start + k * period) % lcm_period
+        #     window_end = (window_start + duration) % lcm_period
+        #     if window_end < window_start:
+        #         windows.append((window_start, lcm_period))
+        #         if window_end != 0:
+        #             windows.append((0, window_end))
+        #     else:
+        #         windows.append((window_start, window_end))
         return windows
 
     """

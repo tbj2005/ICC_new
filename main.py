@@ -608,12 +608,12 @@ def group(job_matrix, t_train, band_per_port, pod, link_matrix_group, job_set_gr
 
 # 主函数
 for a in range(2, 3):
-    for m in range(3, 4):
-        job_number = 100 * m
+    for m in range(1, 2):
+        job_number = 50 * m
         result = []
         wb = Workbook()
         ws = wb.active
-        for n in reversed(range(4, 5)):
+        for n in reversed(range(0, 1)):
             pod_number = int(8 + 4 * n)
             u = 0
             while u < 1:

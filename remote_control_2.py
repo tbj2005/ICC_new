@@ -12,7 +12,7 @@ servers = [
         'password': 'TBJtbj20041204',
         'env': '/home/tbj/.pyenv/versions/3.10.12/bin/python',
         'code_dir': '/home/tbj/dml_code',
-        'network_interface': 'ens10f0np0'  # 修改为实际网卡名
+        'network_interface': 'ens10f1np1'  # 修改为实际网卡名
     },
     {
         'host': '192.168.104.243',
@@ -21,7 +21,7 @@ servers = [
         'password': 'TBJtbj20041204',
         'env': 'python3.10',
         'code_dir': '/home/tbj/dml_code',
-        'network_interface': 'ens10f0np0'  # 修改为实际网卡名
+        'network_interface': 'ens10f1np1'  # 修改为实际网卡名
     }
 ]
 
