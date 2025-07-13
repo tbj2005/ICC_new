@@ -34,7 +34,7 @@ plt.style.use('seaborn')
 datasets = list(data_files.keys())
 
 # 要显示的算法（排除fcfs）
-plot_algorithms = [algo for algo in avg_algorithms if algo != "fcfs"]
+plot_algorithms = [algo for algo in avg_algorithms if algo != "sjf"]
 
 # 图1: 平均时间折线图
 plt.figure(figsize=(10, 6))

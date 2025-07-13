@@ -6,7 +6,7 @@ import heapq
 
 
 class CassiniSimulator:
-    def __init__(self, num_servers, link_capacity):
+    def __init__(self, num_servers, link_capacity, link_matrix):
         """
         Initialize the Cassini simulator for optical interconnected data centers.
 
@@ -16,6 +16,7 @@ class CassiniSimulator:
         """
         self.num_servers = num_servers
         self.link_capacity = link_capacity
+        self.link_matrix = link_matrix
 
         # Create a diagonal connectivity matrix for optical interconnection
         self.connectivity = np.eye(num_servers)
@@ -270,84 +271,108 @@ class CassiniSimulator:
         # 3. 按时间排序所有事件
         events.sort(key=lambda x: x[0])
 
-        # 4. 全局冲突检测
-        active_communications = defaultdict(dict)  # {link: {job_id: bw}}
-        current_penalties = defaultdict(float)  # {job_id: penalty}
-        prev_time = 0
+        active_links = defaultdict(float)  # {link: 当前总带宽}
+        active_jobs = []
+        total_penalty = 0.0
+        prev_time = 0.0
+        iter_num = np.zeros(len(self.active_jobs))
+        job_penalty = np.zeros(len(self.active_jobs))
 
+        # 5. 处理每个时间区间
         for time, typ, job_id, link, bw in events:
-            # 处理上一个时段的冲突
-            time_elapsed = time - prev_time
-            if time_elapsed > 0:
-                self._calculate_instant_penalties(
-                    active_communications,
-                    time_elapsed,
-                    current_penalties
-                )
+            # 计算上一时间段的惩罚
+            if prev_time < time:
+                # 计算所有链路的过载量
+                link_overloads = {
+                    link: max(0, (load - self.link_capacity * self.link_matrix[link]) / (self.link_capacity * self.link_matrix[link]))
+                    for link, load in active_links.items()
+                }
+                # 取最大过载作为该时段惩罚
+                current_penalty = max(link_overloads.values(), default=0.0)
+                # 乘以持续时间
+                total_penalty += current_penalty * (time - prev_time)
+                for job_con in active_jobs:
+                    (bw_id, idx) = job_con
+                    job_penalty[idx] += current_penalty * (time - prev_time) / len(active_jobs)
 
-            # 更新当前活动通信
+            # 更新链路状态
             if typ == 'start':
-                active_communications[link][job_id] = bw
+                active_links[link] += bw
+                active_jobs.append((bw, job_id))
             else:
-                active_communications[link].pop(job_id, None)
+                active_links[link] -= bw
+                active_links[link] = max(0.0, active_links[link])  # 防止负值
+                active_jobs = [ele for ele in active_jobs if ele[1] != job_id]
 
             prev_time = time
 
-        # 5. 应用惩罚（限制最大惩罚）
-        iteration_times = []
+        # 6. 返回总惩罚（单位：Gbps·ms）
+        max_time = (max([j['iteration_time'] for j in self.active_jobs]) + total_penalty) / 1000
+        job_time = []
         for job in self.active_jobs:
-            penalty = min(
-                current_penalties.get(job['id'], 0),
-                job['comm_time'] * 2  # 最多2倍通信时间
-            )
-            iteration_times.append(job['iteration_time'] + penalty)
-
-        self.iteration_times.append(iteration_times)
-        return np.mean(iteration_times)
+            job_time.append((max([j['iteration_time'] for j in self.active_jobs]) / int((max([j['iteration_time'] for j in self.active_jobs]) / job['iteration_time'])) + job_penalty[job['id']]) / 1000)
+        return max_time, job_time
+        # 4. 全局冲突检测
+        # active_communications = defaultdict(dict)  # {link: {job_id: bw}}
+        # current_penalties = defaultdict(float)  # {job_id: penalty}
+        # prev_time = 0
+        #
+        # for time, typ, job_id, link, bw in events:
+        #     # 处理上一个时段的冲突
+        #     time_elapsed = time - prev_time
+        #     if time_elapsed > 0:
+        #         print(1)
+        #         self._calculate_instant_penalties(
+        #             active_communications,
+        #             time_elapsed,
+        #             current_penalties
+        #         )
+        #
+        #     # 更新当前活动通信
+        #     if typ == 'start':
+        #         active_communications[link][job_id] = bw
+        #     else:
+        #         active_communications[link].pop(job_id, None)
+        #
+        #     prev_time = time
+        #
+        # # 5. 应用惩罚（限制最大惩罚）
+        # iteration_times = []
+        # for job in self.active_jobs:
+        #     penalty = min(
+        #         current_penalties.get(job['id'], 0),
+        #         job['comm_time'] * 2  # 最多2倍通信时间
+        #     )
+        #     iteration_times.append(job['iteration_time'] + penalty)
+        #
+        # self.iteration_times.append(iteration_times)
+        # return np.mean(iteration_times)
 
     def _calculate_instant_penalties(self, active_comms, duration, penalties):
         """计算当前瞬时各链路的冲突惩罚"""
-        link_overloads = {}
+        job_link_penalties = defaultdict(list)
 
-        # 第一步：检测所有链路的瞬时过载
+        # 第一步：计算每个作业在各链路的瞬时惩罚
         for link, jobs in active_comms.items():
             total_bw = sum(jobs.values())
-            overload = max(0, total_bw - self.link_capacity)
+            overload = max(0, total_bw - self.link_capacity * self.link_matrix[link])
+
             if overload > 0:
-                link_overloads[link] = {
-                    'total': total_bw,
-                    'overload': overload,
-                    'jobs': jobs
-                }
+                # 分配当前链路的惩罚给各作业
+                for job_id, bw in jobs.items():
+                    penalty = duration * (bw / total_bw) * (overload / (self.link_capacity * self.link_matrix[link]))
+                    job_link_penalties[job_id].append(penalty)
 
-        # 第二步：合并跨链路冲突（避免重复惩罚）
-        conflicted_jobs = set()
-        for link, data in link_overloads.items():
-            for job_id in data['jobs']:
-                conflicted_jobs.add(job_id)
-
-        # 第三步：按作业的"冲突强度"分配惩罚
-        job_conflict_strength = defaultdict(float)
-        total_strength = 0
-
-        for job_id in conflicted_jobs:
-            # 冲突强度 = 该作业在所有过载链路的带宽占比之和
-            strength = 0
-            for link, data in link_overloads.items():
-                if job_id in data['jobs']:
-                    strength += data['jobs'][job_id] / data['total']
-            job_conflict_strength[job_id] = strength
-            total_strength += strength
-
-        if total_strength > 0:
-            for job_id, strength in job_conflict_strength.items():
-                # 惩罚 = 总过载时间 × (该作业的冲突强度占比)
-                penalties[job_id] += duration * (strength / total_strength)
+        # 第二步：对每个作业取最大链路惩罚
+        for job_id, link_penalties in job_link_penalties.items():
+            if link_penalties:
+                penalties[job_id] += max(link_penalties)
 
     def get_periodic_windows(self, start, duration, period, lcm_period):
         """生成周期性通信窗口（支持跨周期边界）"""
         windows = []
-        num_repeats = np.ceil(lcm_period / period)
+        num_repeats = int(lcm_period / period)
+        # num_repeats = 1
         for k in range(num_repeats):
             window_start = (start + k * period) % lcm_period
             window_end = (window_start + duration) % lcm_period
@@ -437,8 +462,8 @@ class CassiniSimulator:
     """
     def run_simulation(self):
         """Run the simulation for multiple iterations."""
-        avg_time, iter_num = self.simulate_iteration()
-        return avg_time, iter_num
+        avg_time, all_time = self.simulate_iteration()
+        return avg_time, all_time
 
 
 # Example usage

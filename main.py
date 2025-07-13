@@ -551,6 +551,7 @@ def group(job_matrix, t_train, band_per_port, pod, link_matrix_group, job_set_gr
         elif long_bool == 0 and short_bool == 0:  # flag = 0
             flag.append(0)
             t_group.append(t1 + t2)
+            # break
         elif long_bool == 0 and short_bool == 1:  # flag = 1
             flag.append(1)
             t_group.append(t1 + t2)
@@ -608,12 +609,12 @@ def group(job_matrix, t_train, band_per_port, pod, link_matrix_group, job_set_gr
 
 # 主函数
 for a in range(2, 3):
-    for m in range(1, 2):
-        job_number = 50 * m
+    for m in range(3, 4):
+        job_number = 100 * m
         result = []
         wb = Workbook()
         ws = wb.active
-        for n in reversed(range(0, 1)):
+        for n in reversed(range(4, 5)):
             pod_number = int(8 + 4 * n)
             u = 0
             while u < 1:
@@ -704,23 +705,23 @@ for a in range(2, 3):
                                 for k in range(len(worker) - 1):
                                     data_matrix_not_tpe[job_index][worker[k]][worker[k + 1]] += single_link_out[job_index]
                                     data_matrix_not_tpe[job_index][worker[k + 1]][worker[k]] += single_link_out[job_index]
-                        print("main", t_iter[0] + t_iter[1])
-                        result_t.append(t_iter[0] + t_iter[1])
+                        print("main", np.mean(t_tpe), t_iter[0] + t_iter[1])
+                        result_t.append(np.mean(t_tpe))
                         result_u.append(t_iter[0] + t_iter[1])
                         g3, g4 = group(data_matrix_not_tpe, train_time, b_link, pod_number, no_tpe_link, job_set[i])
                         train_g3 = [train_time[i] for i in g3] + [0]
                         train_g4 = [train_time[i] for i in g4] + [0]
-                        t_iter_1 = iteration_time(data_matrix_not_tpe, no_tpe_link, pod_number, b_link, g1, g2, max(train_g3),
+                        t_iter_1 = iteration_time(data_matrix_not_tpe, no_tpe_link, pod_number, b_link, g3, g4, max(train_g3),
                                                 max(train_g4))
                         for c in range(job_number):
-                            if c in g3:
-                                t_notpe[c] = train_time[c] + t_iter[5]
-                            if c in g4:
-                                t_notpe[c] = train_time[c] + t_iter[6]
+                            if c in g1:
+                                t_notpe[c] = train_time[c] + t_iter_1[6]
+                            if c in g2:
+                                t_notpe[c] = train_time[c] + t_iter_1[6]
                         # ideal_matrix = b_link * link_matrix_end * (t_iter[0] + t_iter[1])
                         # delta = ideal_matrix - data_matrix
-                        print("no-tpe", t_iter_1[0] + t_iter_1[1])
-                        result_t.append(t_iter_1[0] + t_iter_1[1])
+                        print("no-tpe", np.mean(t_notpe), t_iter_1[0] + t_iter_1[1])
+                        result_t.append(np.mean(t_notpe))
                         result_u.append(t_iter_1[0] + t_iter_1[1])
                         # print(data_matrix)
                         # ILP_new.ilp_new(fix_job, unfix_job, train_time, job_number, pod_number, b_link, single_link_out,
@@ -729,7 +730,7 @@ for a in range(2, 3):
                     # cassini 部分
                     conn_matrix = link_matrix_end * b_link
                     # conn_matrix = link_matrix_end * b_link
-                    simulator = cassini_schedule.CassiniSimulator(num_servers=pod_number, link_capacity=b_link)
+                    simulator = cassini_schedule.CassiniSimulator(num_servers=pod_number, link_capacity=b_link, link_matrix=link_matrix_end)
                     # data_matrix_cassini = np.array([np.zeros([pod_number, pod_number]) for _ in range(len(solution_out))])
                     data_sum_cassini = np.zeros([pod_number, pod_number])
                     for ii in range(len(job_set[i])):
@@ -763,14 +764,11 @@ for a in range(2, 3):
                             t_comp -= 1
                         simulator.add_job(job_index, t_iter, t_comp, band_matrix)
             
-                    avg_times, iter_number = simulator.run_simulation()
-                    mean_time = np.mean(avg_times) / 1000
-                    max_time = np.max(avg_times) / 1000
-                    for c in range(len(job_set[i])):
-                        data_sum_cassini += data_matrix[job_set[i][c]] * iter_number[job_set[i][c]]
+                    max_time, all_time = simulator.run_simulation()
+                    mean_time = np.mean(all_time)
                     ideal_matrix_cassini = max_time * conn_matrix * (len(pod_set[i]) / pod_number) ** 2
                     delta_cassini = ideal_matrix_cassini - data_sum_cassini
-                    print("cassini", mean_time, np.sum(data_sum_cassini) / np.sum(ideal_matrix_cassini))
+                    print("cassini", mean_time, max_time)
                     result_t.append(mean_time)
                     result_u.append(max_time)
 
@@ -821,26 +819,26 @@ for a in range(2, 3):
                         all_comm += comm_time
                     for c in range(len(businesses)):
                         data_sum_sjf += data_matrix[job_set[i][c]] * (1000 / avg[c])
-                    print("SJF", np.max(np.array(avg)), np.mean(np.array(avg)), np.sum(data_sum_sjf) / (1000 * np.sum(link_matrix_end) * b_link))
+                    print("SJF", np.mean(np.array(avg)), np.max(np.array(avg)))
                     result_t.append(np.mean(np.array(avg)))
-                    result_u.append(np.sum(data_sum_sjf) / (np.mean(np.array(avg)) * b_link * np.sum(link_matrix_end)))
+                    result_u.append(np.max(np.array(avg)))
                     for c in range(len(businesses)):
                         data_sum_las += data_matrix[job_set[i][c]] * (1000 / avg_las[c])
-                    print("LAS", np.max(np.array(avg_las)), np.mean(np.array(avg_las)), np.sum(data_sum_las) / (1000 * np.sum(link_matrix_end) * b_link))
+                    print("LAS", np.mean(np.array(avg_las)), np.max(np.array(avg_las)))
                     result_t.append(np.mean(np.array(avg_las)))
                     result_u.append(np.max(np.array(avg_las)))
                     for c in range(len(businesses)):
                         data_sum_hrrn += data_matrix[job_set[i][c]] * (1000 / avg_hrrn[c])
-                    print("HRRN", np.max(np.array(avg_hrrn)), np.mean(np.array(avg_hrrn)), np.sum(data_sum_hrrn) / (1000 * np.sum(link_matrix_end) * b_link))
+                    print("HRRN", np.mean(np.array(avg_hrrn)), np.max(np.array(avg_hrrn)))
                     result_t.append(np.mean(np.array(avg_hrrn)))
                     result_u.append(np.max(np.array(avg_hrrn)))
                     for c in range(len(businesses)):
                         data_sum_fcfs += data_matrix[job_set[i][c]]
-                    print("FCFS", np.max(avg_fcfs), np.mean(np.array(avg_fcfs)), np.sum(data_sum_fcfs) / (np.max(avg_fcfs) * np.sum(link_matrix_end) * b_link))
+                    print("FCFS", np.mean(avg_fcfs), np.max(np.array(avg_fcfs)))
                     result_t.append(np.mean(avg_fcfs))
                     result_u.append(np.max(avg_fcfs))
                     labels = ['TPE', 'No-TPE', 'Cassini', 'SJF', 'LAS', 'HRRN', 'FCFS']
-                    lists = [t_tpe, t_notpe, np.array(avg_times) / 1000, avg, avg_las, avg_hrrn, avg_fcfs]
+                    lists = [t_tpe, t_notpe, all_time, avg, avg_las, avg_hrrn, avg_fcfs]
                     print(lists[0], '\n')
                     print(lists[1], '\n')
                     print(lists[2], '\n')

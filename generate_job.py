@@ -67,9 +67,9 @@ def generate_quintuples(num_services, num_pod):
         }
     ]
 
-    DATA_PARALLEL_DEGREES = [i for i in range(4, 8)]
-    PIPELINE_PARALLEL_DEGREES = [i for i in range(4, 8)]
-    TIME_RANGE = [0.05, 0.8]
+    DATA_PARALLEL_DEGREES = [i for i in range(6, 8)]
+    PIPELINE_PARALLEL_DEGREES = [i for i in range(6, 8)]
+    TIME_RANGE = [0.15, 0.45]
     all_quintuples = []
     for section in data_sections:
         models = section["models"]

@@ -53,12 +53,13 @@ def main():
             # Build the training command with TCP enforcement
             command = (
                 f"export NCCL_SOCKET_IFNAME={server['network_interface']}; "  # 指定RDMA网卡
-                f"export NCCL_IB_HCA=mlx5_0; "             # 指定RDMA设备（根据ibstat输出调整）
+                f"export NCCL_IB_HCA=mlx5_1; "             # 指定RDMA设备（根据ibstat输出调整）
                 # f"export NCCL_NET=IB;"
                 f"export NCCL_IB_GID_INDEX=3; "            # RoCE v2通常使用GID索引3
                 f"export NCCL_IB_TIMEOUT=23; "             # 增加IB超时时间
                 f"export NCCL_NET_GDR_LEVEL=2; "           # 强制使用RoCE v2
                 f"export NCCL_DEBUG=INFO; "                # 开启详细日志
+                # f"export NCCL_IB_DISABLE=0;"
                 # f"export NCCL_IB_QPS_PER_CONNECTION=4; "   # 提高QP数量
                 f"cd {server['code_dir']} && "
                 f"{server['env']} dml2.py "
@@ -69,7 +70,7 @@ def main():
                 f"--batch-size {batch_size} "
                 f"--epochs {num_epochs} "
                 f"--backend nccl "
-                f"--dist-url tcp://{master_addr}:{master_port}"  # 保留TCP回退
+                # f"--dist-url tcp://{master_addr}:{master_port}"  # 保留TCP回退
             )
             
             print(f"\nStarting training on {server['host']} with command:")
