@@ -30,7 +30,7 @@ world_size = len(servers)
 master_addr = servers[0]['host']
 master_port = '29500'
 num_epochs = 10
-batch_size = 32
+batch_size = 4
 
 def main():
     ssh_connections = []
@@ -59,8 +59,8 @@ def main():
                 f"export NCCL_IB_TIMEOUT=23; "             # 增加IB超时时间
                 f"export NCCL_NET_GDR_LEVEL=2; "           # 强制使用RoCE v2
                 f"export NCCL_DEBUG=INFO; "                # 开启详细日志
-                # f"export NCCL_IB_DISABLE=0;"
-                # f"export NCCL_IB_QPS_PER_CONNECTION=4; "   # 提高QP数量
+                f"export NCCL_IB_DISABLE=0;"
+                f"export NCCL_IB_QPS_PER_CONNECTION=4; "   # 提高QP数量
                 f"cd {server['code_dir']} && "
                 f"{server['env']} dml2.py "
                 f"--world-size {world_size} "
