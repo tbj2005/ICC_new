@@ -838,7 +838,8 @@ for a in range(2, 3):
                     result_t.append(np.mean(avg_fcfs))
                     result_u.append(np.max(avg_fcfs))
                     labels = ['TPE', 'No-TPE', 'Cassini', 'SJF', 'LAS', 'HRRN', 'FCFS']
-                    lists = [t_tpe, t_notpe, all_time, avg, avg_las, avg_hrrn, avg_fcfs]
+                    lists_raw = [t_tpe, t_notpe, all_time, avg, avg_las, avg_hrrn, avg_fcfs]
+                    lists = [np.log(array) for array in lists_raw]
                     print(lists[0], '\n')
                     print(lists[1], '\n')
                     print(lists[2], '\n')
